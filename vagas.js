@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const xlsx = require('xlsx');
-async function buscarVagasInfoJobs() {
+async function buscarVagas() {
     const browser = await puppeteer.launch({
         headless: true,
         args: [
@@ -63,7 +63,7 @@ async function buscarVagasInfoJobs() {
 (async () => {
     try {
         console.log('Iniciando busca de vagas...');
-        const vagas = await buscarVagasInfoJobs();
+        const vagas = await buscarVagas();
         console.log('\nVagas encontradas:');
        
         
