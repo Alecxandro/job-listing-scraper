@@ -3,9 +3,13 @@ const fs = require('fs').promises;
 const xlsx = require('xlsx');
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Configuration
+// Configuração
 const CONFIG = {
-    URL: 'https://www.vagas.com.br/vagas-de-sao-paulo-em-sao-paulo?a%5B%5D=11&a%5B%5D=15&a%5B%5D=21&a%5B%5D=130&e%5B%5D=S%C3%A3o+Paulo&h%5B%5D=40&h%5B%5D=30&m%5B%5D=Empresa+e+Home+Office&m%5B%5D=Na+empresa&mo%5B%5D=Regime+CLT',
+    URLs: [
+        'https://www.vagas.com.br/vagas-de-sao-paulo-em-sao-paulo?a%5B%5D=11&a%5B%5D=15&a%5B%5D=21&a%5B%5D=130&e%5B%5D=S%C3%A3o+Paulo&h%5B%5D=40&h%5B%5D=30&m%5B%5D=Empresa+e+Home+Office&m%5B%5D=Na+empresa&mo%5B%5D=Regime+CLT',
+        // Adicione mais URLs aqui
+        'https://www.vagas.com.br/vagas-de-sao-paulo-em-sao-paulo?a%5B%5D=130&e%5B%5D=S%C3%A3o+Paulo&h%5B%5D=40&h%5B%5D=30&m%5B%5D=Empresa+e+Home+Office&m%5B%5D=Na+empresa&mo%5B%5D=Regime+CLT'
+    ],
     USER_AGENT: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     TIMEOUT: 60000,
     INITIAL_DELAY: 3000,
@@ -21,7 +25,7 @@ const CONFIG = {
     }
 };
 
-// Browser setup and management
+// Setup do navegador e página
 async function initializeBrowser() {
     return await puppeteer.launch({
         headless: true,
@@ -36,7 +40,7 @@ async function setupPage(browser) {
     return page;
 }
 
-// Data extraction
+// Extração de dados
 async function extractJobData(page) {
     return await page.evaluate(() => {
         const vagaElements = document.querySelectorAll('.vaga');
@@ -53,7 +57,7 @@ async function extractJobData(page) {
     });
 }
 
-// File handling
+// Gerar nomes de arquivos
 function generateFileNames() {
     const now = new Date();
     const formattedDate = now.toISOString().replace('T', ' ').replace(/:/g, '-').split('.')[0];
@@ -71,41 +75,44 @@ async function saveToJson(data, fileName) {
 function saveToExcel(data, fileName) {
     const workbook = xlsx.utils.book_new();
     const worksheet = xlsx.utils.json_to_sheet(data);
-
-    
-    worksheet['!cols'] = Object.entries(CONFIG.EXCEL_COLUMN_WIDTHS).map(([_, width]) => ({
-        wch: width
-    }));
-
+    worksheet['!cols'] = Object.entries(CONFIG.EXCEL_COLUMN_WIDTHS).map(([_, width]) => ({ wch: width }));
     xlsx.utils.book_append_sheet(workbook, worksheet, 'Vagas');
     xlsx.writeFile(workbook, fileName);
     console.log(`Excel file saved: ${fileName}`);
 }
 
+// Função para buscar empregos em várias URLs
 async function searchJobs() {
     const browser = await initializeBrowser();
-    let page;
+    let allJobs = [];
 
     try {
-        page = await setupPage(browser);
-        console.log('Navigating to jobs page...');
+        for (let url of CONFIG.URLs) {
+            let page = await setupPage(browser);
+            console.log(`Navigating to jobs page: ${url}`);
 
-        await page.goto(CONFIG.URL, {
-            waitUntil: 'networkidle0',
-            timeout: CONFIG.TIMEOUT
-        });
+            await page.goto(url, { waitUntil: 'networkidle0', timeout: CONFIG.TIMEOUT });
 
-        console.log('Waiting for initial load...');
-        await delay(CONFIG.INITIAL_DELAY);
+            console.log('Waiting for initial load...');
+            await delay(CONFIG.INITIAL_DELAY);
 
-        const jobs = await extractJobData(page);
+            const jobs = await extractJobData(page);
 
-        if (jobs.length === 0) {
-            throw new Error('No jobs found');
+            if (jobs.length === 0) {
+                console.log(`No jobs found at ${url}`);
+            } else {
+                console.log(`Found ${jobs.length} jobs at ${url}`);
+                allJobs = allJobs.concat(jobs);
+            }
+
+            await page.close();
         }
 
-        console.log(`Found ${jobs.length} jobs!`);
-        return jobs;
+        if (allJobs.length === 0) {
+            throw new Error('No jobs found across all URLs');
+        }
+
+        return allJobs;
 
     } catch (error) {
         throw new Error(`Error during search: ${error.message}`);
@@ -114,7 +121,7 @@ async function searchJobs() {
     }
 }
 
-
+// Função principal
 async function main() {
     try {
         console.log('Starting job search...');
@@ -130,5 +137,5 @@ async function main() {
     }
 }
 
-// Run the application
+// Executar a aplicação
 main();
